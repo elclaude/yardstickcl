@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mulch Calculator — How Many Bags of Mulch Do I Need?</title>
-<meta name="description" content="Measure your bed in feet and inches and get the exact number of 2 cu ft and 3 cu ft mulch bags, plus cubic yards and cubic feet. Free, fast, works on your phone in the yard.">
+<meta name="description" content="Enter your bed size in feet and pick a depth to get the exact number of 2 cu ft and 3 cu ft mulch bags, plus cubic yards and cubic feet. Free, fast, works on your phone in the yard.">
 <meta name="color-scheme" content="light dark">
 <style>
   :root {
@@ -17,6 +17,7 @@
     --accent: #6b4f2a;
     --accent-ink: #ffffff;
     --accent-soft: #f0e6d6;
+    --warn: #a4361f;
     --radius: 14px;
     --tap: 56px;
   }
@@ -32,6 +33,7 @@
       --accent: #c79a5c;
       --accent-ink: #1a1510;
       --accent-soft: #2f2820;
+      --warn: #e8927c;
     }
   }
 
@@ -116,12 +118,12 @@
     letter-spacing: .04em;
   }
 
-  input[type="number"] {
+  .field input {
     -moz-appearance: textfield;
     appearance: none;
     width: 100%;
     height: var(--tap);
-    padding: 0 3.25rem 0 .9rem;
+    padding: 0 .9rem;
     font-size: 1.25rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -131,17 +133,32 @@
     border-radius: 12px;
   }
 
+  /* Fields that carry a trailing unit label need room for it. */
+  .field.has-unit input { padding-right: 3.25rem; }
+
   input[type="number"]::-webkit-outer-spin-button,
   input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
   }
 
-  input[type="number"]:focus {
+  .field input:focus {
     outline: none;
     border-color: var(--accent);
     background: var(--surface);
   }
+
+  /* Live read-back of what the parser made of the typed value. */
+  .interp {
+    margin: .4rem 0 0;
+    min-height: 1.2em;
+    font-size: .8125rem;
+    line-height: 1.2;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .interp.bad { color: var(--warn); }
 
   .unit {
     position: absolute;
@@ -349,33 +366,19 @@
       <h2 id="calc-h" class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Calculator</h2>
 
       <fieldset>
-        <legend>Length</legend>
+        <legend>Bed size <span class="hint">Feet. Type 12.5 or 12' 6" or 12 6 &mdash; all the same thing.</span></legend>
         <div class="pair">
           <div class="field">
-            <label for="lenFt">Feet</label>
-            <input id="lenFt" type="number" inputmode="numeric" min="0" step="1" placeholder="12">
-            <span class="unit">ft</span>
+            <label for="lenFt">Length</label>
+            <input id="lenFt" type="text" inputmode="decimal" autocomplete="off" autocorrect="off"
+                   autocapitalize="off" spellcheck="false" placeholder="12.5" aria-describedby="lenOut">
+            <p class="interp" id="lenOut"></p>
           </div>
           <div class="field">
-            <label for="lenIn">Inches</label>
-            <input id="lenIn" type="number" inputmode="decimal" min="0" step="1" placeholder="6">
-            <span class="unit">in</span>
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Width</legend>
-        <div class="pair">
-          <div class="field">
-            <label for="widFt">Feet</label>
-            <input id="widFt" type="number" inputmode="numeric" min="0" step="1" placeholder="8">
-            <span class="unit">ft</span>
-          </div>
-          <div class="field">
-            <label for="widIn">Inches</label>
-            <input id="widIn" type="number" inputmode="decimal" min="0" step="1" placeholder="0">
-            <span class="unit">in</span>
+            <label for="widFt">Width</label>
+            <input id="widFt" type="text" inputmode="decimal" autocomplete="off" autocorrect="off"
+                   autocapitalize="off" spellcheck="false" placeholder="8" aria-describedby="widOut">
+            <p class="interp" id="widOut"></p>
           </div>
         </div>
       </fieldset>
@@ -396,7 +399,7 @@
             <span>4&quot;</span>
           </label>
         </div>
-        <div class="field">
+        <div class="field has-unit">
           <label for="depthCustom">Other depth</label>
           <input id="depthCustom" type="number" inputmode="decimal" min="0" step="0.5" placeholder="e.g. 2.5">
           <span class="unit">in</span>
@@ -459,9 +462,9 @@
 <script>
 (function () {
   var lenFt  = document.getElementById('lenFt');
-  var lenIn  = document.getElementById('lenIn');
   var widFt  = document.getElementById('widFt');
-  var widIn  = document.getElementById('widIn');
+  var lenOut = document.getElementById('lenOut');
+  var widOut = document.getElementById('widOut');
   var custom = document.getElementById('depthCustom');
   var radios = Array.prototype.slice.call(document.querySelectorAll('input[name="depth"]'));
 
@@ -473,9 +476,89 @@
     sentence: document.getElementById('sentence')
   };
 
-  function num(el) {
-    var v = parseFloat(el.value);
-    return isFinite(v) && v > 0 ? v : 0;
+  // Parse a length written any of the ways people actually write one.
+  // Returns feet as a number, or null if it can't be read.
+  //
+  //   12        12.5        ->  feet
+  //   12'       12ft        ->  feet
+  //   6"        6in         ->  inches only
+  //   12' 6"    12ft 6in    ->  feet + inches
+  //   12 6      12-6        ->  two bare numbers = feet + inches
+  function parseFeet(raw) {
+    var s = String(raw).toLowerCase().trim()
+      .replace(/[‘’′ʹ]/g, "'")   // ‘ ’ ′ ʹ  ->  '
+      .replace(/[“”″ʺ]/g, '"')   // “ ” ″ ʺ  ->  "
+      .replace(/\s+/g, ' ');
+
+    if (!s) return null;
+
+    var FT = "(?:'|ft\\.?|feet|foot)";
+    var IN = '(?:"|in\\.?|inch|inches)';
+    var N  = '(\\d*\\.?\\d+)';
+    var m;
+
+    // feet + inches, inches marker optional:  12' 6"   12ft 6in   12' 6
+    m = s.match(new RegExp('^' + N + '\\s*' + FT + '\\s*' + N + '\\s*' + IN + '?$'));
+    if (m) return +m[1] + +m[2] / 12;
+
+    // feet only:  12'   12ft
+    m = s.match(new RegExp('^' + N + '\\s*' + FT + '$'));
+    if (m) return +m[1];
+
+    // inches only:  6"   6in
+    m = s.match(new RegExp('^' + N + '\\s*' + IN + '$'));
+    if (m) return +m[1] / 12;
+
+    // two bare numbers:  12 6   12-6
+    m = s.match(new RegExp('^' + N + '[\\s-]+' + N + '$'));
+    if (m) return +m[1] + +m[2] / 12;
+
+    // plain number:  12   12.5
+    m = s.match(new RegExp('^' + N + '$'));
+    if (m) return +m[1];
+
+    return null;
+  }
+
+  // Render feet back as ft/in so the user can confirm it was read right.
+  // Uses ≈ when the value isn't a whole number of inches.
+  function formatFeetInches(ft) {
+    var totalIn = ft * 12;
+    var rounded = Math.round(totalIn);
+    var approx = Math.abs(totalIn - rounded) > 0.001;
+    var f = Math.floor(rounded / 12);
+    var i = rounded % 12;
+    var body;
+
+    if (rounded === 0) body = '0 ft';
+    else if (i === 0)  body = f + ' ft';
+    else if (f === 0)  body = i + ' in';
+    else               body = f + ' ft ' + i + ' in';
+
+    return (approx ? '≈ ' : '= ') + body;
+  }
+
+  // Updates the read-back line and returns feet (0 when blank, null when bad).
+  function readField(input, out) {
+    var raw = input.value.trim();
+
+    if (!raw) {
+      out.textContent = '';
+      out.classList.remove('bad');
+      return 0;
+    }
+
+    var ft = parseFeet(raw);
+
+    if (ft === null) {
+      out.textContent = "can't read that";
+      out.classList.add('bad');
+      return null;
+    }
+
+    out.textContent = formatFeetInches(ft);
+    out.classList.remove('bad');
+    return ft;
   }
 
   function depthInches() {
@@ -495,8 +578,12 @@
   }
 
   function update() {
-    var lengthFt = num(lenFt) + num(lenIn) / 12;
-    var widthFt  = num(widFt) + num(widIn) / 12;
+    var parsedLen = readField(lenFt, lenOut);
+    var parsedWid = readField(widFt, widOut);
+
+    // Unreadable input counts as nothing, which drops us into the empty state.
+    var lengthFt = parsedLen === null ? 0 : parsedLen;
+    var widthFt  = parsedWid === null ? 0 : parsedWid;
     var depthFt  = depthInches() / 12;
 
     var cuft = lengthFt * widthFt * depthFt;
@@ -542,7 +629,7 @@
     });
   });
 
-  [lenFt, lenIn, widFt, widIn].forEach(function (el) {
+  [lenFt, widFt].forEach(function (el) {
     el.addEventListener('input', update);
   });
 

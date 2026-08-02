@@ -71,6 +71,25 @@ test on a phone, bind to all interfaces and use the machine's LAN IP:
 python3 -m http.server 8080 --bind 0.0.0.0
 ```
 
+## Input formats
+
+Length and width are free-text fields parsed by `parseFeet()`. All of these
+mean the same bed:
+
+```
+12.5        12'6"       12ft 6in       12 6
+12          12'         12 feet        12-6
+6"          6in         .5             12’ 6”   (smart quotes)
+```
+
+A read-back line under each field shows how the value was interpreted
+(`= 12 ft 6 in`), using `≈` when the value isn't a whole number of inches.
+Unparseable input reads `can't read that` and the results fall back to the
+empty state rather than showing a stale number.
+
+The fields are `type="text"` — `type="number"` rejects `'`, `"`, and spaces —
+with `inputmode="decimal"` to keep a numeric keypad on mobile.
+
 ## The math
 
 ```
