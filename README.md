@@ -8,20 +8,24 @@ CSS and JS are inline.
 
 ## Deployment
 
-Deployed to Cloudflare Pages directly from this repository.
+Deployed to GitHub Pages from `main`, folder `/ (root)`.
 
-| Setting                | Value          |
-| ---------------------- | -------------- |
-| Framework preset       | None           |
-| Build command          | *(leave empty)* |
-| Build output directory | `/`            |
+<https://elclaude.github.io/yardstickcl/>
 
-Because there is no build step, Cloudflare publishes the repository root as-is.
-Pushing to `main` triggers a deploy.
+There is no build step, so Pages publishes the repository root as-is. Pushing to
+`main` redeploys. Responses carry `Cache-Control: max-age=600`, so an edit can
+take up to ten minutes to appear — hard-refresh if you're checking immediately.
 
-`_headers` is a Cloudflare Pages convention — it sets security headers and keeps
-`index.html` uncached so edits go live immediately rather than sitting in a CDN
-cache. It has no effect when opening the file locally.
+### About `_headers`
+
+`_headers` is a **Cloudflare Pages** convention and has no effect on GitHub
+Pages, which does not support custom response headers at all. The file is kept
+only so the security headers survive if this ever moves to Cloudflare. Treat it
+as inert today — the deployed site sends no CSP, `X-Frame-Options`, or
+`Referrer-Policy`.
+
+That is acceptable here: the page is fully self-contained, loads nothing
+externally, and collects no input that leaves the browser.
 
 ## Local development
 
