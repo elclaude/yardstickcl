@@ -347,6 +347,54 @@
 
   .footer-note { margin: 0; }
 
+  /* ---------- Sticky summary (mobile) ---------- */
+
+  .sticky-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    padding: .55rem 1rem;
+    padding-bottom: calc(.55rem + env(safe-area-inset-bottom, 0px));
+    /* JS raises `bottom` when the on-screen keyboard covers this spot. */
+    transition: bottom .18s ease;
+  }
+
+  .sticky-inner {
+    max-width: 34rem;
+    margin: 0 auto;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .4rem;
+    font-size: .75rem;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+
+  .sticky-inner b {
+    font-size: 1.0625rem;
+    font-weight: 750;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Clear the bar so it never covers the footer. */
+  @media (max-width: 47.99rem) {
+    body { padding-bottom: 6rem; }
+  }
+
+  @media (min-width: 48rem) {
+    .sticky-bar { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sticky-bar { transition: none; }
+  }
+
   @media (min-width: 30rem) {
     h1 { font-size: 2.125rem; }
     .calc, .results { padding: 1.5rem; }
@@ -459,6 +507,17 @@
 
 </div>
 
+<!-- Compact mirror of the results panel, pinned while the user types.
+     aria-hidden because the panel above is already an aria-live region;
+     announcing both would double every update. -->
+<div class="sticky-bar" id="stickyBar" aria-hidden="true">
+  <div class="sticky-inner">
+    <span><b id="sbBags2">&mdash;</b> &times; 2 cu ft</span>
+    <span><b id="sbBags3">&mdash;</b> &times; 3 cu ft</span>
+    <span><b id="sbCuyd">&mdash;</b> cu yd</span>
+  </div>
+</div>
+
 <script>
 (function () {
   var lenFt  = document.getElementById('lenFt');
@@ -474,6 +533,13 @@
     cuyd: document.getElementById('cuyd'),
     cuft: document.getElementById('cuft'),
     sentence: document.getElementById('sentence')
+  };
+
+  var sticky = {
+    bar: document.getElementById('stickyBar'),
+    bags2: document.getElementById('sbBags2'),
+    bags3: document.getElementById('sbBags3'),
+    cuyd: document.getElementById('sbCuyd')
   };
 
   // Parse a length written any of the ways people actually write one.
@@ -595,6 +661,9 @@
       out.cuft.textContent = '—';
       out.sentence.textContent = 'Enter a length and width to see your bag count.';
       out.sentence.classList.add('empty');
+      sticky.bags2.textContent = '—';
+      sticky.bags3.textContent = '—';
+      sticky.cuyd.textContent = '—';
       return;
     }
 
@@ -606,6 +675,10 @@
     out.bags3.textContent = bags3;
     out.cuyd.textContent = tidy(cuyd, 2);
     out.cuft.textContent = tidy(cuft, 1);
+
+    sticky.bags2.textContent = bags2;
+    sticky.bags3.textContent = bags3;
+    sticky.cuyd.textContent = tidy(cuyd, 2);
 
     out.sentence.classList.remove('empty');
     out.sentence.textContent =
@@ -632,6 +705,23 @@
   [lenFt, widFt].forEach(function (el) {
     el.addEventListener('input', update);
   });
+
+  // iOS does not shrink the layout viewport when the keyboard opens, so a
+  // bottom-fixed element ends up behind it — exactly when this bar is meant to
+  // be readable. visualViewport reports the real visible area; the difference
+  // is how far up the bar has to move.
+  var vv = window.visualViewport;
+
+  function trackKeyboard() {
+    var overlap = window.innerHeight - vv.height - vv.offsetTop;
+    sticky.bar.style.bottom = Math.max(0, Math.round(overlap)) + 'px';
+  }
+
+  if (vv) {
+    vv.addEventListener('resize', trackKeyboard);
+    vv.addEventListener('scroll', trackKeyboard);
+    trackKeyboard();
+  }
 
   update();
 })();

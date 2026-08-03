@@ -90,6 +90,22 @@ empty state rather than showing a stale number.
 The fields are `type="text"` — `type="number"` rejects `'`, `"`, and spaces —
 with `inputmode="decimal"` to keep a numeric keypad on mobile.
 
+## Sticky summary bar
+
+Below 48rem, a fixed bar mirrors the bag counts and cubic yards so they stay
+readable while dimensions are being typed. Above 48rem it is `display: none`
+and the page reverts to its normal bottom padding.
+
+iOS does not shrink the layout viewport when the on-screen keyboard opens, so a
+`position: fixed; bottom: 0` element ends up *behind* the keyboard — precisely
+when this bar needs to be visible. `trackKeyboard()` reads `window.visualViewport`
+(the actually-visible area), works out how much the keyboard overlaps, and sets
+`bottom` to that value. Verified by faking `visualViewport.height` and firing
+the real `resize` handler; the bar lands exactly on the keyboard's top edge.
+
+The bar is `aria-hidden` — the results panel above is already an `aria-live`
+region, and announcing both would double every update.
+
 ## The math
 
 ```
